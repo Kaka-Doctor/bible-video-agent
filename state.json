@@ -1,0 +1,10 @@
+{
+  "next": {
+    "book": "John",
+    "chapter": 1
+  },
+  "completed": 0,
+  "last_run": null,
+  "last_video": null,
+  "note": "One chapter a day in canonical order; wraps to Genesis after Revelation. Started at John 1 per the channel plan."
+}
