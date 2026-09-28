@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -99,28 +100,43 @@ def _call_gemini(prompt: str, settings: Settings) -> str:
     if "2.5" in settings.gemini_model or "3" in settings.gemini_model:
         body["generationConfig"]["thinkingConfig"] = {"thinkingBudget": 2048}
 
-    for attempt in range(3):
+    # Transient server-side conditions worth retrying with backoff.
+    retryable = {429, 500, 502, 503, 504}
+    max_attempts = 5
+    for attempt in range(1, max_attempts + 1):
         try:
             r = requests.post(url, headers=headers, json=body, timeout=180)
-            if r.status_code == 400 and "thinkingConfig" in json.dumps(body):
-                # Older models reject thinkingConfig — retry without it.
-                body["generationConfig"].pop("thinkingConfig", None)
-                continue
-            r.raise_for_status()
-            data = r.json()
-            cand = data["candidates"][0]
-            finish = cand.get("finishReason", "")
-            text = "".join(
-                p.get("text", "") for p in cand["content"]["parts"]
-            )
-            if not text.strip():
-                raise ValueError(f"empty completion (finishReason={finish})")
-            if finish == "MAX_TOKENS":
-                log.warning("Gemini hit MAX_TOKENS; output may be truncated.")
-            return text
         except requests.RequestException as exc:
-            log.warning("Gemini attempt %d failed: %s", attempt + 1, exc)
-    raise RuntimeError("Gemini failed after 3 attempts")
+            log.warning("Gemini attempt %d/%d network error: %s",
+                        attempt, max_attempts, exc)
+        else:
+            if r.status_code in retryable:
+                log.warning("Gemini attempt %d/%d got HTTP %d (transient)",
+                            attempt, max_attempts, r.status_code)
+            elif (r.status_code == 400
+                  and "thinkingConfig" in body["generationConfig"]):
+                # Older models reject thinkingConfig — retry once without it.
+                body["generationConfig"].pop("thinkingConfig", None)
+                log.warning("Gemini rejected thinkingConfig; retrying without it")
+                continue
+            else:
+                r.raise_for_status()
+                data = r.json()
+                cand = data["candidates"][0]
+                finish = cand.get("finishReason", "")
+                text = "".join(
+                    p.get("text", "") for p in cand["content"]["parts"]
+                )
+                if not text.strip():
+                    raise ValueError(f"empty completion (finishReason={finish})")
+                if finish == "MAX_TOKENS":
+                    log.warning("Gemini hit MAX_TOKENS; output may be truncated.")
+                return text
+        if attempt < max_attempts:
+            wait = min(8 * 2 ** (attempt - 1), 45)  # 8s, 16s, 32s, 45s
+            log.warning("Retrying Gemini in %ds…", wait)
+            time.sleep(wait)
+    raise RuntimeError(f"Gemini failed after {max_attempts} attempts")
 
 
 def _call_openai_compat(prompt: str, settings: Settings) -> str:
@@ -139,14 +155,16 @@ def _call_openai_compat(prompt: str, settings: Settings) -> str:
             {"role": "user", "content": prompt},
         ],
     }
-    for attempt in range(3):
+    for attempt in range(1, 4):
         try:
             r = requests.post(url, headers=headers, json=body, timeout=180)
             r.raise_for_status()
             data = r.json()
             return data["choices"][0]["message"]["content"]
         except requests.RequestException as exc:
-            log.warning("OpenAI-compat attempt %d failed: %s", attempt + 1, exc)
+            log.warning("OpenAI-compat attempt %d/3 failed: %s", attempt, exc)
+            if attempt < 3:
+                time.sleep(8 * 2 ** (attempt - 1))
     raise RuntimeError("OpenAI-compatible API failed after 3 attempts")
 
 
@@ -329,24 +347,27 @@ def load_script_file(path: str, chapter: Chapter) -> Script:
 def generate_script(chapter: Chapter, settings: Settings) -> Script:
     if settings.gemini_api_key:
         prompt = build_prompt(chapter, settings)
-        raw = _call_gemini(prompt, settings)
         try:
-            script = _parse_script(raw, chapter, source=f"gemini:{settings.gemini_model}")
+            raw = _call_gemini(prompt, settings)
+            script = _parse_script(raw, chapter,
+                                   source=f"gemini:{settings.gemini_model}")
             log.info("Script generated with Gemini (%d words)", script.word_count)
             return script
         except Exception as exc:  # noqa: BLE001
-            log.error("Gemini returned unparseable script: %s", exc)
+            log.error("Gemini failed completely (%s) — falling back to the "
+                      "template script for today.", exc)
     elif settings.openai_api_key:
         prompt = build_prompt(chapter, settings)
-        raw = _call_openai_compat(prompt, settings)
         try:
-            script = _parse_script(raw, chapter, source=f"openai:{settings.openai_model}")
-            log.info("Script generated with OpenAI-compatible API (%d words)", script.word_count)
+            raw = _call_openai_compat(prompt, settings)
+            script = _parse_script(raw, chapter,
+                                   source=f"openai:{settings.openai_model}")
+            log.info("Script generated with OpenAI-compatible API (%d words)",
+                     script.word_count)
             return script
         except Exception as exc:  # noqa: BLE001
-            log.error("OpenAI-compatible API returned unparseable script: %s", exc)
+            log.error("OpenAI-compatible API failed completely (%s) — falling "
+                      "back to the template script for today.", exc)
     else:
         log.warning("No AI key configured (set GEMINI_API_KEY) — using basic template script.")
-    if settings.gemini_api_key or settings.openai_api_key:
-        log.warning("Falling back to template script after LLM failure.")
     return _template_script(chapter)
