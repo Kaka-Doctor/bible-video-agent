@@ -62,12 +62,12 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
-          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-4o-mini' }}
           YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
-          YT_PRIVACY: ${{ vars.YT_PRIVACY }}
-          VOICE: ${{ vars.VOICE }}
+          YT_PRIVACY: ${{ vars.YT_PRIVACY || 'public' }}
+          VOICE: ${{ vars.VOICE || 'en-US-JennyNeural' }}
           BOOK_OVERRIDE: ${{ github.event.inputs.book }}
           CHAPTER_OVERRIDE: ${{ github.event.inputs.chapter }}
           SCRIPT_FILE: ${{ github.event.inputs.script_file }}

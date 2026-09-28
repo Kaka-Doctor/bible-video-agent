@@ -17,9 +17,19 @@ STATE_FILE = ROOT / "state.json"
 
 
 def _bool(value: str | None, default: bool = False) -> bool:
-    if value is None:
+    if value is None or value == "":
         return default
     return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _get(key: str, default: str = "") -> str:
+    """Env lookup where an unset OR empty value falls back to the default.
+
+    Protects against CI systems that export variables with empty values
+    (e.g. GitHub Actions `${{ vars.X }}` when the variable is not defined).
+    """
+    value = os.environ.get(key)
+    return value if value not in (None, "") else default
 
 
 @dataclass
@@ -27,7 +37,7 @@ class Settings:
     # --- Content -----------------------------------------------------------
     translation: str = "kjv"          # bible-api.com translation id
     style: str = "royal_gold"         # slide theme
-    target_words: int = 1050          # ~6-8 minutes of narration
+    target_words: int = 1200          # ~6-8 minutes of narration
     voice: str = "en-US-JennyNeural"  # edge-tts neural voice
     tts_rate: str = "-4%"             # slightly slower, devotional pace
     ken_burns: bool = True            # slow zoom motion on slides
@@ -75,11 +85,11 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> "Settings":
-        get = os.environ.get
+        get = _get
         return cls(
             translation=get("BIBLE_TRANSLATION", "kjv").lower(),
             style=get("VIDEO_STYLE", "royal_gold"),
-            target_words=int(get("TARGET_WORDS", "1050")),
+            target_words=int(get("TARGET_WORDS", "1200")),
             voice=get("VOICE", "en-US-JennyNeural"),
             tts_rate=get("TTS_RATE", "-4%"),
             ken_burns=_bool(get("KEN_BURNS"), True),

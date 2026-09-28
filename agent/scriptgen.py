@@ -47,7 +47,9 @@ TODAY'S PASSAGE: {chapter.book} chapter {chapter.chapter} — {chapter.translati
 FULL CHAPTER TEXT:
 {chapter.full_text()}
 
-Write the script (~{settings.target_words} words of total narration, about 6-8 minutes spoken).
+Write the script with AT LEAST {settings.target_words} words of total narration — that is
+about 6-8 minutes spoken, and short scripts are the #1 quality failure of this
+channel. Write generously, not minimally.
 Structure and spirit of the video:
 1. HOOK — one compelling spoken line that makes a viewer want to stay.
 2. CONTEXT — where this chapter sits in the story of Scripture: author, audience, era, and what came just before (keep it brief and certain; avoid speculative dates).
@@ -57,6 +59,12 @@ Structure and spirit of the video:
 6. OUTRO — a warm one-line blessing, then invite the viewer to subscribe and join tomorrow for the next chapter.
 
 HARD RULES:
+- LENGTH (critical): total narration across all sections must be at least
+  {settings.target_words} words. Aim for: intro 70-100 words; context 120-180;
+  each explanation section 130-200; verse sections 40-80 (commentary around
+  the verse, not re-reading it); "seeing Jesus" 140-200; application 170-220
+  (about 60 words per point); outro 50-80. Add a second "explanation" section
+  if the chapter needs it to reach the length.
 - "narration" is read aloud by a neural voice: plain, speakable English. No markdown, no stage directions, no emojis, no parentheses. Sentences short enough to say in one breath.
 - When narration quotes Scripture, quote it EXACTLY as it appears in the chapter text above.
 - "on_screen" entries: 2-4 ultra-short phrases (max ~7 words each), title case, no ending punctuation. The application section must have exactly 3.
@@ -89,7 +97,7 @@ def _call_gemini(prompt: str, settings: Settings) -> str:
         },
     }
     if "2.5" in settings.gemini_model or "3" in settings.gemini_model:
-        body["generationConfig"]["thinkingConfig"] = {"thinkingBudget": 1024}
+        body["generationConfig"]["thinkingConfig"] = {"thinkingBudget": 2048}
 
     for attempt in range(3):
         try:

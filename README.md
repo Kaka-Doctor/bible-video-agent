@@ -137,7 +137,7 @@ defaults in `agent/config.py`):
 | `VOICE` | `en-US-JennyNeural` | Any edge-tts voice (e.g. `en-US-GuyNeural` male, `en-GB-SoniaNeural` British) |
 | `YT_PRIVACY` | `public` | `public` / `unlisted` / `private` |
 | `GEMINI_MODEL` | `gemini-3.7-flash` | Any Gemini model |
-| `TARGET_WORDS` | `1050` | Script length (~6–8 min) |
+| `TARGET_WORDS` | `1200` | Script length (~6–8 min) |
 | `TTS_RATE` | `-4%` | Narration speed |
 | `TITLE_TEMPLATE` | `Summary of the book of {book} - Chapter {chapter} \|\| Biblia Tafsiri Mbalimbali` | Video title format |
 | `KEN_BURNS` | `1` | `0` disables slide motion (faster renders) |
