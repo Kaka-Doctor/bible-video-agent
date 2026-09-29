@@ -125,6 +125,46 @@ The schedule is `15 8 * * *` UTC = **11:15 EAT** → the video is live before
 the updated `state.json`, so tomorrow's run picks up the next chapter
 (John 1 → John 2 → … → Revelation 22 → Genesis 1 → … all 1,189 chapters).
 
+The **Reply to Comments** workflow runs **every 6 hours** (03:40, 09:40,
+15:40, 21:40 EAT) — see the next section.
+
+---
+
+## Comment replies — warm tone, biblical wisdom
+
+Every 6 hours the agent checks all comments on all of the channel's videos
+and replies to the new ones **in the commenter's own language**
+(English, Swahili, or mixed). Each reply is written fresh by Gemini:
+
+- **Warm, humble, pastoral tone** — like a gracious teacher writing to a friend.
+- **One short piece of biblical wisdom** — a fitting verse reference or a
+  faithfully quoted Scripture line (KJV wording welcome).
+- **1–3 sentences, ≤ 60 words** — never walls of text, never spammy.
+
+Safety rails (so the channel never embarrasses itself):
+
+- Never replies to **itself** (pinned comments, own replies).
+- Never replies **twice** — already-replied comments are detected live from
+  the thread's replies AND the committed `comments_state.json`.
+- Never **argues**: hostile, mocking, or spam comments are answered with
+  silence (Proverbs 26:4) — the model is instructed to skip them.
+- Never **invents** personal stories or credentials, no links, no hashtags.
+- At most **10 replies per run** (configurable) and stops instantly on quota
+  errors. Comment threads older than 90 days are left in peace.
+- If Gemini is down, the run **stays silent** and retries in 6 hours —
+  no generic copy-paste replies, ever.
+
+Manual control:
+
+- Draft without posting: **Actions → Reply to Comments → Run workflow →
+  tick `dry_run`** (lists the comments and shows the drafted replies in the log).
+- Burst mode: same screen, set `max_replies` (e.g. `25`) for one bigger sweep.
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `MAX_COMMENT_REPLIES` | `10` | Max replies per 6-hour run |
+| `COMMENT_MAX_AGE_DAYS` | `90` | Ignore comment threads older than this |
+
 ---
 
 ## Customization
@@ -142,6 +182,8 @@ defaults in `agent/config.py`):
 | `TTS_RATE` | `-4%` | Narration speed |
 | `TITLE_TEMPLATE` | `Summary of the book of {book} - Chapter {chapter} \|\| Biblia Tafsiri Mbalimbali` | Video title format |
 | `KEN_BURNS` | `1` | `0` disables slide motion (faster renders) |
+| `MAX_COMMENT_REPLIES` | `10` | Comment replies per run (see Comment replies section) |
+| `COMMENT_MAX_AGE_DAYS` | `90` | Don't reply to threads older than this |
 
 Restart-from-scratch: edit `state.json` → `next.book` / `next.chapter`.
 
@@ -159,8 +201,9 @@ Restart-from-scratch: edit `state.json` → `next.book` / `next.chapter`.
 - **No runs for 60 days** — GitHub auto-disables cron workflows on inactive
   repos. This repo commits `state.json` daily, which keeps it alive. If you
   paused it for 60+ days, just push any commit and re-enable the workflow.
-- **Quota** — YouTube grants 10,000 API units/day; one upload ≈ 1,600.
-  You have room for ~6 uploads/day if you ever want more.
+- **Quota** — YouTube grants 10,000 API units/day; one upload ≈ 1,600, one
+  comment sweep ≈ 10–520 (10 replies × 50 + listing). Even at full tilt you
+  stay far below the ceiling.
 
 ## Costs
 
@@ -189,9 +232,12 @@ agent/            the agent itself
   tts.py          edge-tts narration
   video.py        FFmpeg Ken Burns assembly
   youtube.py      resumable upload + thumbnail + description
+  comments.py     comment replies — python -m agent.comments
   state.py        next-chapter pointer
 scripts/get_refresh_token.py   one-time YouTube authorization
 examples/john1_script.json     full sample script (used for testing)
 fonts/            Cinzel, EB Garamond, Inter (SIL Open Font License)
-.github/workflows/daily_video.yml   the daily schedule
+.github/workflows/daily_video.yml    the daily video schedule
+.github/workflows/reply_comments.yml the 6-hourly comment replies
+comments_state.json             which comments were already replied to
 ```

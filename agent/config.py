@@ -68,6 +68,10 @@ class Settings:
     yt_privacy: str = "public"
     yt_category_id: str = "27"  # Education
 
+    # --- Comment replies ------------------------------------------------------
+    max_comment_replies: int = 10    # per run; 4 runs/day keeps quota safe
+    comment_max_age_days: int = 90   # don't dig up ancient threads
+
     # --- Video ---------------------------------------------------------------
     width: int = 1920
     height: int = 1080
@@ -124,6 +128,8 @@ class Settings:
             yt_refresh_token=get("YT_REFRESH_TOKEN", ""),
             yt_privacy=get("YT_PRIVACY", "public"),
             yt_category_id=get("YT_CATEGORY_ID", "27"),
+            max_comment_replies=int(get("MAX_COMMENT_REPLIES", "10") or 10),
+            comment_max_age_days=int(get("COMMENT_MAX_AGE_DAYS", "90") or 90),
             book_override=get("BOOK_OVERRIDE", "").strip(),
             chapter_override=int(get("CHAPTER_OVERRIDE", "0") or 0),
             script_file=get("SCRIPT_FILE", "").strip(),
