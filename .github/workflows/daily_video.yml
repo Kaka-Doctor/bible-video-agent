@@ -57,6 +57,23 @@ jobs:
       - name: Install Python dependencies
         run: pip install -r requirements.txt
 
+      - name: Preflight — Gemini models available today
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          curl -s -m 30 -H "x-goog-api-key: $GEMINI_API_KEY" \
+            "https://generativelanguage.googleapis.com/v1beta/models?pageSize=200" \
+            | python3 -c "
+          import json, sys
+          try:
+              d = json.load(sys.stdin)
+              names = sorted(m['name'].split('/')[-1] for m in d.get('models', []))
+              flash = [n for n in names if 'flash' in n.lower()]
+              print('flash models:', ', '.join(flash) or '(none)')
+          except Exception as exc:
+              print('model listing failed:', exc)
+          "
+
       - name: Generate today's video
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}

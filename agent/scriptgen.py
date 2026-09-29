@@ -80,10 +80,11 @@ Return ONLY valid JSON matching exactly this shape:
 # LLM backends
 # ---------------------------------------------------------------------------
 
-def _call_gemini(prompt: str, settings: Settings) -> str:
+def _call_gemini_model(prompt: str, settings: Settings, model: str,
+                       max_attempts: int = 5) -> str:
     url = (
         "https://generativelanguage.googleapis.com/v1beta/models/"
-        f"{settings.gemini_model}:generateContent"
+        f"{model}:generateContent"
     )
     headers = {
         "x-goog-api-key": settings.gemini_api_key,
@@ -97,12 +98,11 @@ def _call_gemini(prompt: str, settings: Settings) -> str:
             "maxOutputTokens": 16384,
         },
     }
-    if "2.5" in settings.gemini_model or "3" in settings.gemini_model:
+    if "2.5" in model or "3" in model:
         body["generationConfig"]["thinkingConfig"] = {"thinkingBudget": 2048}
 
     # Transient server-side conditions worth retrying with backoff.
     retryable = {429, 500, 502, 503, 504}
-    max_attempts = 5
     for attempt in range(1, max_attempts + 1):
         try:
             r = requests.post(url, headers=headers, json=body, timeout=180)
@@ -134,9 +134,34 @@ def _call_gemini(prompt: str, settings: Settings) -> str:
                 return text
         if attempt < max_attempts:
             wait = min(8 * 2 ** (attempt - 1), 45)  # 8s, 16s, 32s, 45s
-            log.warning("Retrying Gemini in %ds…", wait)
+            log.warning("Retrying %s in %ds…", model, wait)
             time.sleep(wait)
-    raise RuntimeError(f"Gemini failed after {max_attempts} attempts")
+    raise RuntimeError(f"{model} failed after {max_attempts} attempts")
+
+
+def _call_gemini(prompt: str, settings: Settings) -> str:
+    """Try the primary model, then the fallback chain.
+
+    Different models live in different serving capacity pools, so when the
+    primary is overloaded (503) an alias like gemini-flash-latest often still
+    works. Unknown model names 404 immediately and cost nothing.
+    """
+    chain: list[str] = [settings.gemini_model]
+    chain += [m for m in settings.gemini_fallback_models
+              if m and m != settings.gemini_model]
+    last_exc: Exception | None = None
+    for i, model in enumerate(chain):
+        attempts = 5 if i == 0 else 3
+        try:
+            return _call_gemini_model(prompt, settings, model,
+                                      max_attempts=attempts)
+        except Exception as exc:  # noqa: BLE001
+            last_exc = exc
+            log.warning("Gemini model %s unavailable: %s", model, exc)
+            if i < len(chain) - 1:
+                log.warning("Switching to fallback model: %s", chain[i + 1])
+    raise RuntimeError(
+        f"all Gemini models failed ({', '.join(chain)}): {last_exc}")
 
 
 def _call_openai_compat(prompt: str, settings: Settings) -> str:
