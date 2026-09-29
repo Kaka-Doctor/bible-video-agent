@@ -63,5 +63,8 @@ jobs:
             echo "No comment state change to commit."
           else
             git commit -m "chore: update comment-reply state $(date -u +%FT%TZ)"
+            # Another push may have landed after checkout (e.g. the daily
+            # video's state commit) — rebase ours on top and retry.
+            git pull --rebase origin main
             git push
           fi

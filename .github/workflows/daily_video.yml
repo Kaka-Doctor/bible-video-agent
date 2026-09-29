@@ -114,5 +114,8 @@ jobs:
             echo "No state change to commit."
           else
             git commit -m "chore: advance chapter pointer after run $(date -u +%F)"
+            # Another push may have landed after checkout (e.g. comment-state
+            # commit or a manual push) — rebase ours on top and retry.
+            git pull --rebase origin main
             git push
           fi

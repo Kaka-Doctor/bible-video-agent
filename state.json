@@ -1,10 +1,15 @@
 {
   "next": {
     "book": "John",
-    "chapter": 1
+    "chapter": 2
   },
-  "completed": 0,
-  "last_run": null,
-  "last_video": null,
+  "completed": 1,
+  "last_run": "2026-09-29T10:03:59+00:00",
+  "last_video": {
+    "book": "John",
+    "chapter": 1,
+    "id": "Ad-yN8jZCCc",
+    "url": "https://youtu.be/Ad-yN8jZCCc"
+  },
   "note": "One chapter a day in canonical order; wraps to Genesis after Revelation. Started at John 1 per the channel plan."
 }
