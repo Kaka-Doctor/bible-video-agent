@@ -48,9 +48,9 @@ TODAY'S PASSAGE: {chapter.book} chapter {chapter.chapter} — {chapter.translati
 FULL CHAPTER TEXT:
 {chapter.full_text()}
 
-Write the script with AT LEAST {settings.target_words} words of total narration — that is
-about 6-8 minutes spoken, and short scripts are the #1 quality failure of this
-channel. Write generously, not minimally.
+Write the script with {settings.target_words}–{settings.target_words + 250} words of total
+narration — that is 6-8 minutes spoken. Longer is NOT better: stay inside
+the range, and never go below it.
 Structure and spirit of the video:
 1. HOOK — one compelling spoken line that makes a viewer want to stay.
 2. CONTEXT — where this chapter sits in the story of Scripture: author, audience, era, and what came just before (keep it brief and certain; avoid speculative dates).
@@ -60,12 +60,12 @@ Structure and spirit of the video:
 6. OUTRO — a warm one-line blessing, then invite the viewer to subscribe and join tomorrow for the next chapter.
 
 HARD RULES:
-- LENGTH (critical): total narration across all sections must be at least
-  {settings.target_words} words. Aim for: intro 70-100 words; context 120-180;
+- LENGTH (critical): total narration across all sections must be between
+  {settings.target_words} and {settings.target_words + 250} words — count
+  roughly as you write. Aim for: intro 70-100 words; context 120-180;
   each explanation section 130-200; verse sections 40-80 (commentary around
   the verse, not re-reading it); "seeing Jesus" 140-200; application 170-220
-  (about 60 words per point); outro 50-80. Add a second "explanation" section
-  if the chapter needs it to reach the length.
+  (about 60 words per point); outro 50-80. Use at most 11 sections.
 - "narration" is read aloud by a neural voice: plain, speakable English. No markdown, no stage directions, no emojis, no parentheses. Sentences short enough to say in one breath.
 - When narration quotes Scripture, quote it EXACTLY as it appears in the chapter text above.
 - "on_screen" entries: 2-4 ultra-short phrases (max ~7 words each), title case, no ending punctuation. The application section must have exactly 3.
@@ -139,12 +139,14 @@ def _call_gemini_model(prompt: str, settings: Settings, model: str,
     raise RuntimeError(f"{model} failed after {max_attempts} attempts")
 
 
-def _call_gemini(prompt: str, settings: Settings) -> str:
+def _call_gemini(prompt: str, settings: Settings) -> tuple[str, str]:
     """Try the primary model, then the fallback chain.
 
     Different models live in different serving capacity pools, so when the
     primary is overloaded (503) an alias like gemini-flash-latest often still
     works. Unknown model names 404 immediately and cost nothing.
+
+    Returns (text, model_actually_used).
     """
     chain: list[str] = [settings.gemini_model]
     chain += [m for m in settings.gemini_fallback_models
@@ -154,7 +156,7 @@ def _call_gemini(prompt: str, settings: Settings) -> str:
         attempts = 5 if i == 0 else 3
         try:
             return _call_gemini_model(prompt, settings, model,
-                                      max_attempts=attempts)
+                                      max_attempts=attempts), model
         except Exception as exc:  # noqa: BLE001
             last_exc = exc
             log.warning("Gemini model %s unavailable: %s", model, exc)
@@ -373,10 +375,10 @@ def generate_script(chapter: Chapter, settings: Settings) -> Script:
     if settings.gemini_api_key:
         prompt = build_prompt(chapter, settings)
         try:
-            raw = _call_gemini(prompt, settings)
-            script = _parse_script(raw, chapter,
-                                   source=f"gemini:{settings.gemini_model}")
-            log.info("Script generated with Gemini (%d words)", script.word_count)
+            raw, model_used = _call_gemini(prompt, settings)
+            script = _parse_script(raw, chapter, source=f"gemini:{model_used}")
+            log.info("Script generated with Gemini %s (%d words)",
+                     model_used, script.word_count)
             return script
         except Exception as exc:  # noqa: BLE001
             log.error("Gemini failed completely (%s) — falling back to the "

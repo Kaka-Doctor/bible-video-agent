@@ -37,7 +37,7 @@ class Settings:
     # --- Content -----------------------------------------------------------
     translation: str = "kjv"          # bible-api.com translation id
     style: str = "royal_gold"         # slide theme
-    target_words: int = 1200          # ~6-8 minutes of narration
+    target_words: int = 1000          # ~6-8 minutes of narration
     voice: str = "en-US-JennyNeural"  # edge-tts neural voice
     tts_rate: str = "-4%"             # slightly slower, devotional pace
     ken_burns: bool = True            # slow zoom motion on slides
@@ -91,7 +91,7 @@ class Settings:
         return cls(
             translation=get("BIBLE_TRANSLATION", "kjv").lower(),
             style=get("VIDEO_STYLE", "royal_gold"),
-            target_words=int(get("TARGET_WORDS", "1200")),
+            target_words=int(get("TARGET_WORDS", "1000")),
             voice=get("VOICE", "en-US-JennyNeural"),
             tts_rate=get("TTS_RATE", "-4%"),
             ken_burns=_bool(get("KEN_BURNS"), True),
