@@ -55,7 +55,8 @@ class Settings:
     gemini_api_key: str = ""
     gemini_model: str = "gemini-3.7-flash"
     gemini_fallback_models: list[str] = field(
-        default_factory=lambda: ["gemini-flash-latest", "gemini-2.5-flash"])
+        default_factory=lambda: ["gemini-3.8-flash", "gemini-flash-latest",
+                                 "gemini-3.6-flash"])
     openai_api_key: str = ""
     openai_base_url: str = "https://api.openai.com/v1"
     openai_model: str = "gpt-4o-mini"
@@ -111,7 +112,8 @@ class Settings:
             gemini_fallback_models=[
                 m.strip()
                 for m in get("GEMINI_FALLBACK_MODELS",
-                             "gemini-flash-latest,gemini-2.5-flash").split(",")
+                             "gemini-3.8-flash,gemini-flash-latest,"
+                             "gemini-3.6-flash").split(",")
                 if m.strip()
             ],
             openai_api_key=get("OPENAI_API_KEY", ""),

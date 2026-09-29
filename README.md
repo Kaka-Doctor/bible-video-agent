@@ -136,8 +136,8 @@ defaults in `agent/config.py`):
 |----------|---------|---------|
 | `VOICE` | `en-US-JennyNeural` | Any edge-tts voice (e.g. `en-US-GuyNeural` male, `en-GB-SoniaNeural` British) |
 | `YT_PRIVACY` | `public` | `public` / `unlisted` / `private` |
-| `GEMINI_MODEL` | `gemini-3.7-flash` | Any Gemini model (falls back to `gemini-flash-latest`, `gemini-2.5-flash` on overload) |
-| `GEMINI_FALLBACK_MODELS` | `gemini-flash-latest,gemini-2.5-flash` | Comma-separated backup models if the primary is 503-overloaded |
+| `GEMINI_MODEL` | `gemini-3.7-flash` | Any Gemini model (verified working) |
+| `GEMINI_FALLBACK_MODELS` | `gemini-3.8-flash,gemini-flash-latest,gemini-3.6-flash` | Backup models if the primary is overloaded (503) — probed & verified with this key; `gemini-2.5-flash` returns 404 and must NOT be used |
 | `TARGET_WORDS` | `1000` | Script length (~6–8 min) |
 | `TTS_RATE` | `-4%` | Narration speed |
 | `TITLE_TEMPLATE` | `Summary of the book of {book} - Chapter {chapter} \|\| Biblia Tafsiri Mbalimbali` | Video title format |
