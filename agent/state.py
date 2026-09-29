@@ -3,13 +3,31 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .bible import next_chapter, normalize_book
 from .config import STATE_FILE, Settings
 
 log = logging.getLogger("state")
+
+# The channel's posting day runs on East Africa Time (UTC+3).
+EAT = timezone(timedelta(hours=3))
+
+
+def today_eat() -> str:
+    """Today's date (YYYY-MM-DD) in EAT — defines the 'posting day'."""
+    return datetime.now(EAT).strftime("%Y-%m-%d")
+
+
+def posted_today(data: dict, today: str | None = None) -> bool:
+    """True if the channel already posted a video on today's EAT date.
+
+    Backwards compatible: old state files without last_post_date → False.
+    """
+    if not data.get("last_video"):
+        return False
+    return str(data.get("last_post_date") or "") == (today or today_eat())
 
 
 def load(path: Path = STATE_FILE, settings: Settings | None = None) -> dict:
@@ -47,6 +65,8 @@ def advance(path: Path, book: str, chapter: int, video_url: str,
         "last_run": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "last_video": {"book": book, "chapter": chapter, "id": video_id,
                        "url": video_url},
+        # The once-per-day guard keys off this (EAT calendar day).
+        "last_post_date": today_eat(),
     })
     path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     log.info("State advanced → next chapter: %s %d (total completed: %d)",

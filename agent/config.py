@@ -72,6 +72,12 @@ class Settings:
     max_comment_replies: int = 10    # per run; 4 runs/day keeps quota safe
     comment_max_age_days: int = 90   # don't dig up ancient threads
 
+    # --- Quality gate (pre-upload checks) --------------------------------------
+    min_script_words: int = 850      # narration words; ~6 minutes spoken
+    min_video_minutes: float = 5.0   # final video must be at least this long
+    max_video_minutes: float = 9.5   # and never longer (channel brief: 6-8)
+    force_upload: bool = False       # bypass the once-per-day guard
+
     # --- Video ---------------------------------------------------------------
     width: int = 1920
     height: int = 1080
@@ -130,6 +136,10 @@ class Settings:
             yt_category_id=get("YT_CATEGORY_ID", "27"),
             max_comment_replies=int(get("MAX_COMMENT_REPLIES", "10") or 10),
             comment_max_age_days=int(get("COMMENT_MAX_AGE_DAYS", "90") or 90),
+            min_script_words=int(get("MIN_SCRIPT_WORDS", "850") or 850),
+            min_video_minutes=float(get("MIN_VIDEO_MINUTES", "5.0") or 5.0),
+            max_video_minutes=float(get("MAX_VIDEO_MINUTES", "9.5") or 9.5),
+            force_upload=_bool(get("FORCE_UPLOAD"), False),
             book_override=get("BOOK_OVERRIDE", "").strip(),
             chapter_override=int(get("CHAPTER_OVERRIDE", "0") or 0),
             script_file=get("SCRIPT_FILE", "").strip(),

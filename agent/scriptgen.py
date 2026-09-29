@@ -24,6 +24,10 @@ log = logging.getLogger("scriptgen")
 
 VALID_TYPES = {"intro", "context", "verse", "explanation", "jesus", "application", "outro"}
 
+# How many times to re-ask Gemini when a draft comes back too short
+# (the pre-upload quality gate then makes the final call on posting).
+MAX_DRAFTS = 3
+
 SCHEMA_HINT = """{
   "hook": "spoken first line that draws the viewer in (15-25 words)",
   "thumbnail_hook": "3-6 punchy words for the thumbnail image",
@@ -374,15 +378,42 @@ def load_script_file(path: str, chapter: Chapter) -> Script:
 def generate_script(chapter: Chapter, settings: Settings) -> Script:
     if settings.gemini_api_key:
         prompt = build_prompt(chapter, settings)
-        try:
-            raw, model_used = _call_gemini(prompt, settings)
-            script = _parse_script(raw, chapter, source=f"gemini:{model_used}")
-            log.info("Script generated with Gemini %s (%d words)",
-                     model_used, script.word_count)
-            return script
-        except Exception as exc:  # noqa: BLE001
-            log.error("Gemini failed completely (%s) — falling back to the "
-                      "template script for today.", exc)
+        min_words = settings.min_script_words
+        best: Script | None = None
+        for draft in range(1, MAX_DRAFTS + 1):
+            if draft > 1:
+                prev = best.word_count if best else 0
+                prompt = prompt + (
+                    f"\n\nCRITICAL LENGTH FIX: your previous draft had only "
+                    f"{prev} words of narration — too short. Write the COMPLETE "
+                    f"script with at least {min_words} words of total narration "
+                    "across all sections. Do not summarize, do not abbreviate, "
+                    "do not omit or merge sections; develop each one fully.")
+            try:
+                raw, model_used = _call_gemini(prompt, settings)
+                script = _parse_script(raw, chapter,
+                                       source=f"gemini:{model_used}")
+                if script.word_count >= min_words:
+                    log.info("Script generated with Gemini %s (%d words, "
+                             "draft %d/%d)", model_used, script.word_count,
+                             draft, MAX_DRAFTS)
+                    return script
+                log.warning("Gemini draft %d/%d TOO SHORT (%d words, need %d) "
+                            "— regenerating with a stricter length demand",
+                            draft, MAX_DRAFTS, script.word_count, min_words)
+                if best is None or script.word_count > best.word_count:
+                    best = script
+            except Exception as exc:  # noqa: BLE001
+                log.error("Gemini draft %d/%d failed (%s)", draft,
+                          MAX_DRAFTS, exc)
+        if best is not None:
+            log.error("All %d Gemini drafts were short (best: %d words). The "
+                      "pre-upload quality gate will now decide whether this "
+                      "script may be posted at all.", MAX_DRAFTS,
+                      best.word_count)
+            return best
+        log.error("Gemini failed completely — falling back to the template "
+                  "script for today (the quality gate will still vet it).")
     elif settings.openai_api_key:
         prompt = build_prompt(chapter, settings)
         try:

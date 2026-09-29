@@ -2,9 +2,13 @@ name: Daily Bible Video
 
 on:
   schedule:
-    # 08:15 UTC = 11:15 EAT (UTC+3) — renders and goes LIVE before 12:00 EAT.
-    # GitHub cron may add a few minutes of delay on busy days.
+    # Primary: 08:15 UTC = 11:15 EAT — renders and goes LIVE before 12:00 EAT.
+    # GitHub cron can be delayed by hours on busy days (it happened: 08:15
+    # once fired at 14:51 UTC). The 08:45 backup slot below catches those
+    # misses — double-firing is safe thanks to the once-per-day guard in
+    # agent/main.py (exactly one video per EAT calendar day, ever).
     - cron: "15 8 * * *"
+    - cron: "45 8 * * *"
   workflow_dispatch:
     inputs:
       book:
@@ -21,6 +25,10 @@ on:
         default: ""
       no_upload:
         description: "Dry run — render but do not upload to YouTube"
+        type: boolean
+        default: false
+      force:
+        description: "Bypass the once-per-day guard (post even if today's video is already live)"
         type: boolean
         default: false
 
@@ -88,6 +96,8 @@ jobs:
           BOOK_OVERRIDE: ${{ github.event.inputs.book }}
           CHAPTER_OVERRIDE: ${{ github.event.inputs.chapter }}
           SCRIPT_FILE: ${{ github.event.inputs.script_file }}
+          FORCE_UPLOAD: ${{ (github.event_name == 'workflow_dispatch'
+                        && (inputs.force == true || inputs.force == 'true')) && 'true' || '' }}
           DRY_RUN: ${{ (github.event_name == 'workflow_dispatch'
                         && (inputs.no_upload == true || inputs.no_upload == 'true')) && 'true' || '' }}
         run: python -m agent.main
@@ -102,6 +112,7 @@ jobs:
             output/*_thumb.jpg
             output/metadata.json
             output/last_script.json
+            output/qa_report.json
           if-no-files-found: warn
           retention-days: 14
 

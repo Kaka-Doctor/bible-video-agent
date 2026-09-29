@@ -130,6 +130,41 @@ The **Reply to Comments** workflow runs **every 6 hours** (03:40, 09:40,
 
 ---
 
+## One video per day — guaranteed
+
+Exactly **one** video goes out per EAT calendar day, no matter how many
+triggers fire: delayed cron runs, manual "Run workflow" clicks, re-runs,
+or the backup cron slot (08:45 UTC, which catches GitHub's occasional
+multi-hour cron delays). After a successful upload the workflow commits
+`last_post_date` into `state.json`; every later trigger the same day sees
+the once-per-day guard in `agent/main.py` and exits cleanly without
+posting. Need an exception (e.g. re-posting after deleting a bad video)?
+Run the workflow with the **`force`** input ticked, or locally:
+`python -m agent.main --force`.
+
+## Pre-upload quality gate
+
+A video must **earn** its upload. Before anything is posted, the agent
+checks it against the channel guidelines (`agent/qa.py`) and refuses to
+upload — leaving state untouched so the chapter retries the next day — if
+ANY check fails:
+
+| Check | Requirement |
+|-------|-------------|
+| `script_length` | ≥ `MIN_SCRIPT_WORDS` (850) words of narration ≈ 6 minutes |
+| `has_jesus_section` | the channel's signature "Seeing Jesus" section present |
+| `has_application_section` | practical daily-life application present |
+| `has_verse_section` | at least one key-verse section |
+| `video_duration_min/max` | final video between `MIN_VIDEO_MINUTES` (5.0) and `MAX_VIDEO_MINUTES` (9.5) |
+| `title` / `description` / `thumbnail` | non-empty, sane sizes |
+
+Short Gemini drafts are not accepted either: the script writer regenerates
+them up to 3 times with an explicit length demand before the gate sees
+them. A full JSON report is written to `output/qa_report.json` and attached
+to every workflow run as an artifact — check it any time a day is skipped.
+
+---
+
 ## Comment replies — warm tone, biblical wisdom
 
 Every 6 hours the agent checks all comments on all of the channel's videos
@@ -184,6 +219,9 @@ defaults in `agent/config.py`):
 | `KEN_BURNS` | `1` | `0` disables slide motion (faster renders) |
 | `MAX_COMMENT_REPLIES` | `10` | Comment replies per run (see Comment replies section) |
 | `COMMENT_MAX_AGE_DAYS` | `90` | Don't reply to threads older than this |
+| `MIN_SCRIPT_WORDS` | `850` | Quality gate: minimum narration words (≈ 6 min) |
+| `MIN_VIDEO_MINUTES` | `5.0` | Quality gate: minimum final video length |
+| `MAX_VIDEO_MINUTES` | `9.5` | Quality gate: maximum final video length |
 
 Restart-from-scratch: edit `state.json` → `next.book` / `next.chapter`.
 
@@ -196,8 +234,13 @@ Restart-from-scratch: edit `state.json` → `next.book` / `next.chapter`.
 - **Refresh token stopped working** — if your consent screen is in *Testing*
   mode, tokens expire after 7 days. Set it to **Production/Publish** and
   re-run `scripts/get_refresh_token.py`, then update the secret.
+- **No video posted today** — the quality gate refused it (by design: a
+  missing day beats a bad video). Open the day's workflow run → logs, or
+  download the run artifact and read `qa_report.json` to see which check
+  failed. State was NOT advanced, so the same chapter retries next run.
 - **Scheduled run didn't fire at exactly 11:15** — GitHub cron can be delayed
-  by a few minutes at busy times; the video still goes out that morning.
+  by minutes or (rarely) hours; a 08:45 UTC backup slot catches the misses,
+  and the once-per-day guard makes double-firing impossible.
 - **No runs for 60 days** — GitHub auto-disables cron workflows on inactive
   repos. This repo commits `state.json` daily, which keeps it alive. If you
   paused it for 60+ days, just push any commit and re-enable the workflow.
@@ -233,7 +276,8 @@ agent/            the agent itself
   video.py        FFmpeg Ken Burns assembly
   youtube.py      resumable upload + thumbnail + description
   comments.py     comment replies — python -m agent.comments
-  state.py        next-chapter pointer
+  qa.py           pre-upload quality gate (guidelines enforcement)
+  state.py        next-chapter pointer + once-per-day guard
 scripts/get_refresh_token.py   one-time YouTube authorization
 examples/john1_script.json     full sample script (used for testing)
 fonts/            Cinzel, EB Garamond, Inter (SIL Open Font License)

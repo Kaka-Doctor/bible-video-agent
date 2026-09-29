@@ -17,6 +17,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+from . import qa
 from . import state as state_mod
 from .bible import fetch_chapter, next_chapter, normalize_book
 from .config import OUTPUT_DIR, ROOT, Settings, WORK_DIR
@@ -61,6 +62,9 @@ def main(argv: list[str] | None = None) -> int:
                         help="render the video but do not upload")
     parser.add_argument("--keep-state", action="store_true",
                         help="do not advance state.json")
+    parser.add_argument("--force", action="store_true",
+                        help="bypass the once-per-day guard (posts even if "
+                             "today's video is already live)")
     parser.add_argument("--output-dir", default=str(OUTPUT_DIR))
     args = parser.parse_args(argv)
 
@@ -81,6 +85,8 @@ def main(argv: list[str] | None = None) -> int:
         settings.dry_run = True
     if args.keep_state:
         settings.keep_state = True
+    if args.force:
+        settings.force_upload = True
 
     started = time.time()
 
@@ -89,6 +95,21 @@ def main(argv: list[str] | None = None) -> int:
     book = normalize_book(settings.book_override or st["next"]["book"])
     chapter = settings.chapter_override or st["next"]["chapter"]
     _banner(f"TODAY: {book} {chapter} — {settings.channel_name}")
+
+    # 1b. ONCE-PER-DAY GUARD -------------------------------------------------
+    # Exactly one video per EAT calendar day, no matter how many times the
+    # workflow is triggered (delayed cron, manual run, re-run, …).
+    if (not settings.dry_run and not settings.force_upload
+            and state_mod.posted_today(st)):
+        lv = st.get("last_video") or {}
+        log.info("ONCE-PER-DAY GUARD: today's video is already live (%s). "
+                 "The channel posts exactly one video per day — skipping "
+                 "this run. Use --force / FORCE_UPLOAD to override.",
+                 lv.get("url", "(unknown url)"))
+        return 0
+
+    out_dir = Path(args.output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
 
     # 2. Fetch the text ------------------------------------------------------
     chapter_data = fetch_chapter(book, chapter, settings.translation)
@@ -100,6 +121,22 @@ def main(argv: list[str] | None = None) -> int:
         script = generate_script(chapter_data, settings)
     log.info("Script ready (%d words, %d sections, source=%s)",
              script.word_count, len(script.sections), script.source)
+
+    # 3b. SCRIPT QUALITY GATE -------------------------------------------------
+    script_checks = qa.check_script(script, settings)
+    qa.log_checks("SCRIPT QA", script_checks)
+    if not all(c.passed for c in script_checks):
+        qa.write_report(out_dir / "qa_report.json", script_checks,
+                        stage="script", book=book, chapter=chapter,
+                        script_words=script.word_count,
+                        script_source=script.source)
+        for c in script_checks:
+            if not c.passed:
+                log.error("SCRIPT QA FAIL — %s: %s", c.name, c.detail)
+        log.error("The script does not meet the channel guidelines — "
+                  "refusing to render or upload. State NOT advanced; "
+                  "%s %d will be retried on the next run.", book, chapter)
+        return 1
 
     # 4. Slides ---------------------------------------------------------------
     work = WORK_DIR
@@ -119,8 +156,6 @@ def main(argv: list[str] | None = None) -> int:
                           work / "audio")
 
     # 6. Video ------------------------------------------------------------------
-    out_dir = Path(args.output_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
     slug = f"{book.lower().replace(' ', '_')}_chapter_{chapter}"
     video_path = out_dir / f"{slug}.mp4"
     stats = render_video(slides, wavs, video_path,
@@ -143,6 +178,27 @@ def main(argv: list[str] | None = None) -> int:
                                     section_chapters, settings)
     title = settings.video_title(book, chapter)
     tags = build_tags(book, chapter, settings)
+
+    # 8b. QUALITY GATE — the video must earn its upload -----------------------
+    video_checks = qa.check_video(video_path, stats, settings)
+    packaging_checks = qa.check_packaging(title, description, thumb_jpg)
+    qa.log_checks("VIDEO QA", video_checks + packaging_checks)
+    qa_passed = qa.write_report(
+        out_dir / "qa_report.json", script_checks + video_checks + packaging_checks,
+        book=book, chapter=chapter, script_words=script.word_count,
+        script_source=script.source,
+        duration_seconds=round(stats["duration"], 1), title=title)
+    if not qa_passed:
+        for c in video_checks + packaging_checks:
+            if not c.passed:
+                log.error("VIDEO QA FAIL — %s: %s", c.name, c.detail)
+        log.error("QUALITY GATE FAILED — %s %d does not meet the channel "
+                  "guidelines, so it will NOT be uploaded. State NOT "
+                  "advanced; the chapter is retried on the next run.",
+                  book, chapter)
+        return 1
+    log.info("QUALITY GATE PASSED (%d checks green) — clear to upload.",
+             len(script_checks) + len(video_checks) + len(packaging_checks))
 
     # 9. Upload ---------------------------------------------------------------------
     video_id, video_url = "", ""
@@ -175,6 +231,7 @@ def main(argv: list[str] | None = None) -> int:
         "duration_seconds": round(stats["duration"], 1),
         "script_source": script.source,
         "script_words": script.word_count,
+        "qa_passed": qa_passed,
         "uploaded": bool(video_id),
     }
     (out_dir / "metadata.json").write_text(
