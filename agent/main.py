@@ -114,16 +114,38 @@ def main(argv: list[str] | None = None) -> int:
     # 2. Fetch the text ------------------------------------------------------
     chapter_data = fetch_chapter(book, chapter, settings.translation)
 
-    # 3. Write the script ----------------------------------------------------
+    # 3. Write the script (+ STORM RESILIENCE) ---------------------------------
+    # A full Gemini 503 storm once left only the short template script, the
+    # quality gate (correctly) blocked it, and the channel went dark for the
+    # day. Now: if script QA fails, wait out the storm and try again, up to
+    # SCRIPT_RETRY_ROUNDS rounds (default 3, ~15 min apart).
     if settings.script_file:
         script = load_script_file(settings.script_file, chapter_data)
+        script_checks = qa.check_script(script, settings)
     else:
-        script = generate_script(chapter_data, settings)
-    log.info("Script ready (%d words, %d sections, source=%s)",
-             script.word_count, len(script.sections), script.source)
+        rounds = max(1, settings.script_retry_rounds)
+        script_checks = []
+        for rnd in range(1, rounds + 1):
+            script = generate_script(chapter_data, settings)
+            log.info("Script ready — round %d/%d (%d words, %d sections, "
+                     "source=%s)", rnd, rounds, script.word_count,
+                     len(script.sections), script.source)
+            script_checks = qa.check_script(script, settings)
+            if all(c.passed for c in script_checks):
+                break
+            fails = "; ".join(f"{c.name} ({c.detail})" for c in script_checks
+                              if not c.passed)
+            if rnd < rounds:
+                wait_min = settings.storm_wait_seconds // 60
+                log.error("SCRIPT QA failed on round %d/%d: %s — the AI "
+                          "backend is likely storming. Waiting %d minutes "
+                          "for it to recover, then retrying.",
+                          rnd, rounds, fails, wait_min)
+                time.sleep(settings.storm_wait_seconds)
+            else:
+                log.error("SCRIPT QA failed on every round: %s", fails)
 
     # 3b. SCRIPT QUALITY GATE -------------------------------------------------
-    script_checks = qa.check_script(script, settings)
     qa.log_checks("SCRIPT QA", script_checks)
     if not all(c.passed for c in script_checks):
         qa.write_report(out_dir / "qa_report.json", script_checks,

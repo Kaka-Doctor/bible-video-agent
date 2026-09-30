@@ -80,7 +80,9 @@ class Chapter:
 
 def normalize_book(name: str) -> str:
     key = name.strip().lower()
-    key = BOOK_ALIASES.get(key, key)
+    key = BOOK_ALIASES.get(key, key).lower()  # alias, then keep lowercase:
+    # a found alias is title-case, so compare case-insensitively both ways
+    # (bug symptom: "Genesis"/"Revelation" were rejected after alias lookup).
     for canonical, _chapters, _nr in BOOKS:
         if canonical.lower() == key:
             return canonical

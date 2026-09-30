@@ -56,7 +56,13 @@ class Settings:
     gemini_model: str = "gemini-3.7-flash"
     gemini_fallback_models: list[str] = field(
         default_factory=lambda: ["gemini-3.8-flash", "gemini-flash-latest",
-                                 "gemini-3.6-flash"])
+                                 "gemini-3.6-flash", "gemini-3.5-flash",
+                                 "gemini-3.1-flash-lite"])
+    # Storm resilience: how many total script-generation rounds to attempt
+    # when the script QA fails (e.g. a Gemini 503 storm leaves only the short
+    # template), and how long to wait between rounds for the storm to pass.
+    script_retry_rounds: int = 3
+    storm_wait_seconds: int = 900
     openai_api_key: str = ""
     openai_base_url: str = "https://api.openai.com/v1"
     openai_model: str = "gpt-4o-mini"
@@ -123,9 +129,12 @@ class Settings:
                 m.strip()
                 for m in get("GEMINI_FALLBACK_MODELS",
                              "gemini-3.8-flash,gemini-flash-latest,"
-                             "gemini-3.6-flash").split(",")
+                             "gemini-3.6-flash,gemini-3.5-flash,"
+                             "gemini-3.1-flash-lite").split(",")
                 if m.strip()
             ],
+            script_retry_rounds=int(get("SCRIPT_RETRY_ROUNDS", "3") or 3),
+            storm_wait_seconds=int(get("STORM_WAIT_SECONDS", "900") or 900),
             openai_api_key=get("OPENAI_API_KEY", ""),
             openai_base_url=get("OPENAI_BASE_URL", "https://api.openai.com/v1"),
             openai_model=get("OPENAI_MODEL", "gpt-4o-mini"),

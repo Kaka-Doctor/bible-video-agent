@@ -7,8 +7,12 @@ on:
     # once fired at 14:51 UTC). The 08:45 backup slot below catches those
     # misses — double-firing is safe thanks to the once-per-day guard in
     # agent/main.py (exactly one video per EAT calendar day, ever).
+    # The 16:15 UTC slot (19:15 EAT) is a final evening self-heal chance:
+    # if both morning slots failed (e.g. a long Gemini 503 storm), the
+    # evening run retries; if a video is already live it exits in ~1 min.
     - cron: "15 8 * * *"
     - cron: "45 8 * * *"
+    - cron: "15 16 * * *"
   workflow_dispatch:
     inputs:
       book:
@@ -44,7 +48,9 @@ concurrency:
 jobs:
   generate:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # 90 min: storm-resilience can wait 2 × 15 min between script retries,
+    # plus generation sweeps and render/upload time.
+    timeout-minutes: 90
     steps:
       - name: Check out the repository
         uses: actions/checkout@v4
@@ -100,6 +106,8 @@ jobs:
                         && (inputs.force == true || inputs.force == 'true')) && 'true' || '' }}
           DRY_RUN: ${{ (github.event_name == 'workflow_dispatch'
                         && (inputs.no_upload == true || inputs.no_upload == 'true')) && 'true' || '' }}
+          SCRIPT_RETRY_ROUNDS: ${{ vars.SCRIPT_RETRY_ROUNDS || '3' }}
+          STORM_WAIT_SECONDS: ${{ vars.STORM_WAIT_SECONDS || '900' }}
         run: python -m agent.main
 
       - name: Save video as workflow artifact
