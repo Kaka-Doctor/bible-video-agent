@@ -6,6 +6,7 @@ serifs, EB Garamond scripture text and Inter UI type.
 """
 from __future__ import annotations
 
+import math
 import random
 from pathlib import Path
 
@@ -245,3 +246,117 @@ def flourish(draw, cx: float, y: float, width: float, color=PALETTE["gold"]):
 
 def paste_center(base: Image.Image, tile: Image.Image, cx: float, cy: float):
     base.paste(tile, (int(cx - tile.width / 2), int(cy - tile.height / 2)), tile)
+
+
+# ---------------------------------------------------------------------------
+# Epic YouTube thumbnail engine
+# ---------------------------------------------------------------------------
+
+# metallic gold ramp used for the big display text
+GOLD_TEXT_STOPS = [
+    (0.0, (250, 232, 160)),
+    (0.45, (222, 184, 62)),
+    (0.75, (196, 152, 44)),
+    (1.0, (138, 103, 34)),
+]
+
+
+def gradient_text_tile(text: str, font, stops=GOLD_TEXT_STOPS,
+                       stroke_width: int = 0, stroke_fill=(8, 12, 30),
+                       tracking: float = 0.0) -> Image.Image:
+    """Render one line of text with a vertical gradient fill, outline and
+    optional letter tracking on a transparent RGBA tile."""
+    # measure (with tracking) on a scratch surface
+    scratch = Image.new("RGBA", (8, 8))
+    sd = ImageDraw.Draw(scratch)
+    if tracking:
+        widths = [sd.textlength(ch, font=font) for ch in text]
+        text_w = sum(widths) + tracking * max(len(text) - 1, 0)
+    else:
+        text_w = sd.textlength(text, font=font)
+    asc, desc = font.getmetrics()
+    w = int(text_w) + 2 * stroke_width + 12
+    h = asc + desc + 2 * stroke_width + 12
+
+    tile = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    td = ImageDraw.Draw(tile)
+
+    def _draw_text(fill, stroke_fill_, stroke_w):
+        if tracking:
+            x = 6 + stroke_width
+            for ch, cw in zip(text, widths):
+                td.text((x, 6 + stroke_width), ch, font=font, fill=fill,
+                        stroke_width=stroke_w, stroke_fill=stroke_fill_)
+                x += cw + tracking
+        else:
+            td.text((6 + stroke_width, 6 + stroke_width), text, font=font,
+                    fill=fill, stroke_width=stroke_w, stroke_fill=stroke_fill_)
+
+    if stroke_width:  # dark outline underlay
+        _draw_text((*stroke_fill, 255), (*stroke_fill, 255), stroke_width)
+    # gradient fill through the glyph mask
+    mask = Image.new("L", (w, h), 0)
+    md = ImageDraw.Draw(mask)
+    if tracking:
+        x = 6 + stroke_width
+        for ch, cw in zip(text, widths):
+            md.text((x, 6 + stroke_width), ch, font=font, fill=255)
+            x += cw + tracking
+    else:
+        md.text((6 + stroke_width, 6 + stroke_width), text, font=font, fill=255)
+    grad = gradient(w, h, stops)
+    tile.paste(grad, (0, 0), mask)
+    return tile
+
+
+def paste_with_shadow(base: Image.Image, tile: Image.Image, cx: float, cy: float,
+                      offset=(0, 10), blur=14, alpha=170):
+    """Paste a tile centered at (cx, cy) with a soft drop shadow beneath."""
+    x, y = int(cx - tile.width / 2), int(cy - tile.height / 2)
+    sh = Image.new("RGBA", base.size, (0, 0, 0, 0))
+    sh.paste((0, 0, 0, alpha), (x + offset[0], y + offset[1]), tile.split()[3])
+    sh = sh.filter(ImageFilter.GaussianBlur(blur))
+    base.alpha_composite(sh)
+    base.paste(tile, (x, y), tile)
+
+
+def god_rays(img: Image.Image, focus: tuple[float, float], seed_key: str,
+             n: int = 13, min_len: float = 0.42, max_len: float = 0.98,
+             color=(232, 196, 96)) -> Image.Image:
+    """Radiating translucent light wedges from a focus point (epic backlight)."""
+    rng = random.Random(f"rays-{seed_key}")
+    w, h = img.size
+    rays = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    rd = ImageDraw.Draw(rays)
+    max_r = (w ** 2 + h ** 2) ** 0.5
+    for i in range(n):
+        ang = (i / n) * 360 + rng.uniform(-8, 8)
+        spread = rng.uniform(2.2, 5.5)
+        ln = max_r * rng.uniform(min_len, max_len)
+        pts = [focus]
+        for da in (-spread / 2, spread / 2):
+            a = math.radians(ang + da)
+            pts.append((focus[0] + ln * math.cos(a), focus[1] + ln * math.sin(a)))
+        rd.polygon(pts, fill=(*color, int(rng.uniform(14, 34))))
+    rays = rays.filter(ImageFilter.GaussianBlur(7))
+    return Image.alpha_composite(img.convert("RGBA"), rays).convert("RGBA")
+
+
+def radial_glow(img: Image.Image, focus: tuple[float, float], radius: float,
+                color=(222, 184, 62), alpha: int = 70, blur: int = 130) -> Image.Image:
+    """Soft circular glow behind a focal point."""
+    glow = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    gd = ImageDraw.Draw(glow)
+    gd.ellipse([focus[0] - radius, focus[1] - radius,
+                focus[0] + radius, focus[1] + radius],
+               fill=(*color, alpha))
+    glow = glow.filter(ImageFilter.GaussianBlur(blur))
+    return Image.alpha_composite(img.convert("RGBA"), glow)
+
+
+def corner_diamonds(draw: ImageDraw.ImageDraw, w: int, h: int, inset: int,
+                    r: int = 9, color=PALETTE["gold"]):
+    for cx, cy in ((inset, inset), (w - inset, inset),
+                   (inset, h - inset), (w - inset, h - inset)):
+        draw.polygon([(cx, cy - r), (cx + r, cy), (cx, cy + r), (cx - r, cy)],
+                     fill=(*color, 220))

@@ -1,0 +1,45 @@
+name: Retrofit Live Videos
+
+# Manually-triggered maintenance: re-render the epic thumbnail and append the
+# Play Store app link for every agent video already live on the channel.
+on:
+  workflow_dispatch:
+    inputs:
+      video_id:
+        description: "Optional: only retrofit this video id (blank = all)"
+        default: ""
+      dry_run:
+        description: "Preview only — no changes on YouTube"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  retrofit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Update live videos (epic thumbnails + app link footer)
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          VIDEO_ID: ${{ inputs.video_id }}
+          DRY_RUN: ${{ (github.event_name == 'workflow_dispatch'
+                     && (inputs.dry_run == true || inputs.dry_run == 'true')) && '1' || '' }}
+        run: python scripts/update_live_videos.py
