@@ -52,20 +52,36 @@ TITLE_RE = re.compile(
 API = "https://www.googleapis.com/youtube/v3"
 
 
+def _clean_phrase(raw: str) -> str:
+    """Reduce a model reply to a plain alphabetic phrase. Models sometimes
+    wrap the answer in JSON despite instructions — if quoted strings are
+    present, the longest one is the value (the key is short); otherwise all
+    non-alphanumeric characters are stripped."""
+    raw = raw or ""
+    quoted = re.findall(r'"([^"]+)"', raw)
+    if quoted:
+        raw = max(quoted, key=len)
+    text = re.sub(r"[^A-Za-z0-9' -]+", " ", raw)
+    words = [w.strip("'-") for w in text.split()]
+    return " ".join(w for w in words if w and len(w) <= 20)
+
+
 def hook_for(book: str, chapter: int, settings: Settings) -> str:
-    """A punchy 3-5 word hook for the thumbnail. Gemini first; verse-1
-    fallback keeps the retrofit alive through any AI outage."""
+    """A punchy 3-5 word hook for the thumbnail. Gemini first (reply is
+    sanitized — models sometimes wrap it in JSON despite instructions);
+    verse-1 fallback keeps the retrofit alive through any AI outage."""
     prompt = (f"Give ONE punchy YouTube-thumbnail hook phrase of 3 to 5 words "
               f"(ALL words meaningful, no filler) that captures the drama or "
               f"theme of {book} chapter {chapter} in the Bible. Reply with "
-              f"ONLY the phrase — no quotes, no punctuation, no explanation.")
+              f"ONLY the phrase — no quotes, no punctuation, no explanation, "
+              f"no JSON.")
     try:
         text, source = _call_gemini(prompt, settings)
-        words = text.strip().strip('"\'').split()
-        if 2 <= len(words) <= 6:
-            phrase = " ".join(w.strip(".,:;!?—-") for w in words)
+        phrase = _clean_phrase(text)
+        if 3 <= len(phrase.split()) <= 6:
             log.info("hook (via %s): %s", source, phrase)
             return phrase
+        log.warning("unusable Gemini hook %r — trying verse fallback", text[:60])
     except Exception as exc:  # noqa: BLE001
         log.warning("Gemini hook failed (%s) — using verse fallback", exc)
     try:

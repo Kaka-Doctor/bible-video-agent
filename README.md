@@ -163,6 +163,32 @@ them up to 3 times with an explicit length demand before the gate sees
 them. A full JSON report is written to `output/qa_report.json` and attached
 to every workflow run as an artifact — check it any time a day is skipped.
 
+## Epic thumbnails
+
+Every video gets a dedicated high-impact YouTube thumbnail (not a scaled-down
+slide): dramatic navy backdrop with god-rays and a **glowing cross**, a
+**massive metallic-gold book name** (numeric prefixes like "1" in
+"1 Corinthians" are split off so the name itself stays huge), a gold
+**CHAPTER N** badge, and a punchy white hook line. The whole text stack is
+dynamically centered and auto-sized to the vertical budget, so no book name
+or hook length can ever overflow the frame — verified with box-measurement
+QA and five VLM design reviews. The hook comes from the script's
+`thumbnail_hook`; hooks are trimmed to the 4 most meaningful words and
+remain readable at mobile-feed size.
+
+## Play Store app link in every description
+
+Every uploaded description ends with:
+
+> Download Our App from PlayStore with this link:
+> https://play.google.com/store/apps/details?id=com.biblia.tafsiri.mbalimbali
+
+Already-live videos get the footer too: run the **Retrofit Live Videos**
+workflow (`.github/workflows/update_live_videos.yml`, manual dispatch). It
+re-renders the epic thumbnail and appends the link for every agent video on
+the channel — idempotent, safe to re-run, with `dry_run` and `video_id`
+knobs for previews/single-video updates.
+
 ---
 
 ## Comment replies — warm tone, biblical wisdom

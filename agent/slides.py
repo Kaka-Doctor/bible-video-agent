@@ -288,7 +288,8 @@ class SlideRenderer:
 
     @staticmethod
     def _short_hook(hook: str, max_words: int = 4) -> str:
-        words = [w.strip(" ,.:;—-–\"'()") for w in hook.split()]
+        # strip JSON/model artifacts and punctuation from every word edge
+        words = [w.strip(" ,.:;—-–\"'(){}[]<>#*") for w in hook.split()]
         words = [w for w in words if w][:max_words]
         phrase = " ".join(words).strip()
         return phrase.upper()[:26]
