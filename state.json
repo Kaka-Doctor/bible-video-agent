@@ -1,16 +1,16 @@
 {
   "next": {
     "book": "John",
-    "chapter": 8
+    "chapter": 9
   },
-  "completed": 7,
-  "last_run": "2026-10-05T17:21:56+00:00",
+  "completed": 8,
+  "last_run": "2026-10-05T22:46:44+00:00",
   "last_video": {
     "book": "John",
-    "chapter": 7,
-    "id": "8iI4Ppd8MNM",
-    "url": "https://youtu.be/8iI4Ppd8MNM"
+    "chapter": 8,
+    "id": "yIABgZF5Des",
+    "url": "https://youtu.be/yIABgZF5Des"
   },
-  "last_post_date": "2026-10-05",
+  "last_post_date": "2026-10-06",
   "note": "One chapter a day in canonical order; wraps to Genesis after Revelation. Started at John 1 per channel plan. John 2 was posted short (1:51, template fallback) on 2026-09-29 and deleted; it re-posts on 2026-09-30 through the pre-upload quality gate."
 }
