@@ -55,6 +55,18 @@ jobs:
       - name: Check out the repository
         uses: actions/checkout@v4
 
+      # FAIL FAST: if the YouTube OAuth refresh token is dead (e.g. the
+      # 7-day expiry of a TESTING-mode Google OAuth app), exit in ~20s
+      # with the runbook instead of rendering for 10-90 min and dying at
+      # the upload step. Skipped on no_upload dry runs.
+      - name: Fail fast - YouTube OAuth token health check
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.no_upload != 'true' }}
+        env:
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+        run: python3 scripts/authcheck.py
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:

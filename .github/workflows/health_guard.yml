@@ -1,0 +1,40 @@
+name: Channel Health Guard
+
+on:
+  schedule:
+    # Runs daily at 18:30 UTC (21:30 EAT), AFTER the 16:15 UTC last-chance
+    # slot has fully finished (worst case ~17:45). Checks the channel's
+    # PUBLIC RSS feed: if no upload in the last 32h (the channel posts
+    # once per day), it diagnoses the OAuth token and opens/reopens an
+    # alert issue in this repo — you get an email notification. The issue
+    # auto-closes when posting resumes.
+    - cron: "30 18 * * *"
+  workflow_dispatch:
+
+# issues:write -> open/close the alert issue. GITHUB_TOKEN suffices.
+permissions:
+  issues: write
+  contents: read
+
+concurrency:
+  group: health-guard
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Check the channel is still posting (RSS + OAuth diagnosis)
+        env:
+          CHANNEL_ID: "UCCG-5I0PU6YKzDnkWPlJdLg"
+          CHANNEL_HANDLE: "BIBLIATAFSIRIMBALIMBALI"
+          SILENT_HOURS: "32"
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+        run: python3 scripts/health_guard.py
